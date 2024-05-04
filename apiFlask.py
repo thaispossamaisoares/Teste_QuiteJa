@@ -23,3 +23,5 @@ def obter_tipo(id):
 
 if __name__ == '__main__':
     app.run(debug=True)
+
+# usar para teste: http://localhost:5000/tipo/1
