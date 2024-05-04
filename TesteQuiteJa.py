@@ -48,25 +48,20 @@ for linha in tipos:
 
 # Leitura do arquivo origem-dados.csv
 with open(caminho_origem_dados, newline='') as arquivo_origem:
-    leitor_origem = csv.reader(arquivo_origem)
-    leitor_csv    = csv.DictReader(arquivo_origem) 
+    leitor_origem = csv.DictReader(arquivo_origem)
 
-    for linha in leitor_csv:
-        origem_dados.append(linha)
-
+    for linha in leitor_origem:
         tipo_id = int(linha['tipo'])
         if tipo_id in tipos_dict:
             linha['nome_tipo'] = tipos_dict[tipo_id]  # Adicionando o nome do tipo
-           
-
+            
         if linha['status'].upper() == 'CRITICO': # Verifica o campo CRITICO
             dados_criticos.append(linha)
             # print(linha)
 
 # Ordenar os dados filtrados pelo campo "created_at"
-dados_criticos_ordenados = sorted(origem_dados, key=lambda x: datetime.strptime(x['created_at'], '%Y-%m-%d %H:%M:%S'))
+dados_criticos_ordenados = sorted(dados_criticos, key=lambda x: datetime.strptime(x['created_at'], '%Y-%m-%d %H:%M:%S'))
 
-# Imprimir os dados filtrados e ordenados
 print("Dados Identificados como CRÍTICOS (Ordenados por 'created_at'):")
 for dado in dados_criticos_ordenados:
     print(dado)
@@ -83,29 +78,25 @@ nomes_colunas = ['created_at', 'product_code', 'customer_code', 'status', 'tipo'
 
 # Abrir o arquivo SQL para escrita
 with open(caminho_sql, 'w') as arquivo_sql:
-    # Inserir o cabeçalho do insert
+    # Inserir o cabecalho do insert
     arquivo_sql.write(f"INSERT INTO {nome_tabela} ({', '.join(nomes_colunas)}) VALUES\n")
 
-    # Escrever os inserts para cada linha de dados críticos
+    # Escrever os inserts para cada linha de dados criticos
     for dado in dados_criticos_ordenados:
         valores = [f"'{dado[coluna]}'" if isinstance(dado[coluna], str) else str(dado[coluna]) for coluna in nomes_colunas]
         linha_insert = f"({', '.join(valores)}),\n"
         arquivo_sql.write(linha_insert)
-
-    # Remover a última vírgula e adicionar o ponto e vírgula final
-    arquivo_sql.seek(arquivo_sql.tell() - 2, os.SEEK_SET)
-    arquivo_sql.write(";\n")
 
 print(f"Arquivo SQL criado em: {caminho_sql}")
 
 # ////////////////////////////////////////////// BANCO ////////////////////////////////////////////////////
 # - com base na estrutura desta tabela, monte uma query que retorne, por dia, a quantidade de itens agrupadas pelo tipo;
 
-# Criar uma conexão com o banco 
-conn = sqlite3.connect('dados.db')
+# Conexao com o banco
+con = sqlite3.connect('dados.db')
 
-# Criar uma tabela chamada dados_finais 
-conn.execute('''
+# Cria tabela dados_finais 
+con.execute('''
 CREATE TABLE IF NOT EXISTS dados_finais (
     id INTEGER PRIMARY KEY,
     created_at TEXT,
@@ -113,36 +104,42 @@ CREATE TABLE IF NOT EXISTS dados_finais (
     customer_code TEXT,
     status TEXT,
     tipo INTEGER,
-    nome_tipo TEXT
-)
+    nome_tipo TEXT)
 ''')
 
-# Inserir os dados críticos no banco de dados
-for dado in dados_criticos_ordenados:
-    conn.execute('''
-    INSERT INTO dados_finais (created_at, product_code, customer_code, status, tipo, nome_tipo)
-    VALUES (?, ?, ?, ?, ?, ?)
-    ''', (dado['created_at'], dado['product_code'], dado['customer_code'], dado['status'], dado['tipo'], dado['nome_tipo']))
+# Inserir os dados críticos no banco
+for coluna_dado in dados_criticos_ordenados:
+    con.execute('''
+        INSERT INTO dados_finais (created_at, product_code, customer_code, status, tipo, nome_tipo)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ''',
+            (coluna_dado['created_at'], 
+             coluna_dado['product_code'], 
+             coluna_dado['customer_code'], 
+             coluna_dado['status'], 
+             coluna_dado['tipo'], 
+             coluna_dado['nome_tipo']
+            )
+        )
 
-# Commit das alterações no banco de dados
-conn.commit()
+# Commit das alteracoes no banco
+con.commit()
 
-# Montar a query SQL para obter a quantidade de itens agrupados por dia e tipo
+# Montar a query SQL para obtendo a quantidade de itens agrupados por dia e tipo
 query = '''
-SELECT DATE(created_at) AS data, tipo, nome_tipo, COUNT(*) AS quantidade
-FROM dados_finais
-GROUP BY DATE(created_at), tipo, nome_tipo
-ORDER BY data, tipo, nome_tipo
-'''
+        SELECT DATE(created_at) AS data, tipo, nome_tipo, 
+            COUNT(*) AS quantidade
+        FROM dados_finais
+            GROUP BY DATE(created_at), tipo, nome_tipo
+            ORDER BY data, tipo, nome_tipo '''
 
 # Executar a query 
-resultado = conn.execute(query)
+resultado = con.execute(query)
 
 # Imprimir o resultado
-print("Quantidade de itens agrupados por dia e tipo:")
 for row in resultado:
     print(row)
 
-# Fechar a conexão com o banco de dados
-conn.close()
+# Fechar o banco de dados
+con.close()
 
